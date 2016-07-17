@@ -4,9 +4,9 @@
 #include "taskbase.h"
 
 /*	一个任务测试类，继承自TaskBase
- * 
+ *
  */
- 
+
 class tasktest : public TaskBase{
 public:
 	void run(ofstream& os);

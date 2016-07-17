@@ -7,7 +7,7 @@
 #include <time.h>
 
 /* 单例模式
- * 
+ *
  */
 ThreadPool *ThreadPool::m_instance = NULL;
 
@@ -18,7 +18,7 @@ ThreadPool *ThreadPool::create_instance(){
 	return m_instance;
 }
 /* 构造函数
- * 
+ *
  *
  */
 ThreadPool::ThreadPool()
@@ -29,8 +29,8 @@ ThreadPool::ThreadPool()
 	 num_total(0),
 	 num_min_t(MIN_THREAD_NUM),
 	 num_max_t(MAX_THREAD_NUM),
-	
-	 
+
+
 	 num_of_idle(0),
 	 num_of_busy(0),
 	 idle_head(NULL),
@@ -43,7 +43,7 @@ ThreadPool::ThreadPool()
 	pthread_mutex_init(&list_lock,NULL); //初始化互斥量
 }
 /* 功能：	初始化线程池，创建最少的线程数
- * 参数：	
+ * 参数：
  * 返回值：	成功返回true,失败返回false
  */
 bool ThreadPool::init(){
@@ -52,7 +52,7 @@ bool ThreadPool::init(){
 	/* 创建num个线程 */
 	if(!create_thread(num_min_t))
 		return false;
-	if(manager_flag)	
+	if(manager_flag)
 		if(!create_manager())
 			cout<<"	craete manager failed!	"<<endl;
 	initialed = true;
@@ -64,7 +64,7 @@ bool ThreadPool::init(){
  * 返回值：	成功返回true,失败返回false
  */
 bool ThreadPool::create_thread(size_t number){
-	
+
 	if(0 != pthread_mutex_lock(&count_lock))
 		return false;
 	Thread *tmp = NULL;
@@ -128,7 +128,7 @@ void ThreadPool::add_to_idle(Thread *p_thread){
 	}
 	p_thread->m_state = isidle;
 	num_of_idle++;
-	
+
 	pthread_mutex_unlock(&list_lock);
 }
 
@@ -136,7 +136,7 @@ void ThreadPool::add_to_idle(Thread *p_thread){
  * 参数：	p_thread，线程对象的指针
  * 返回值：	无
  */
-void ThreadPool::add_to_busy(Thread *p_thread){  
+void ThreadPool::add_to_busy(Thread *p_thread){
 	if(p_thread->m_state == isbusy)
 		return;
 	if(0 != pthread_mutex_lock(&list_lock))
@@ -168,7 +168,7 @@ void ThreadPool::add_to_busy(Thread *p_thread){
 	}
 	p_thread->m_state = isbusy;
 	num_of_busy++;
-	
+
 	pthread_mutex_unlock(&list_lock);
 }
 
@@ -182,7 +182,7 @@ void ThreadPool::delete_thread(Thread *p_thread){
 	pthread_mutex_unlock(&count_lock);
 	if(0 != pthread_mutex_lock(&list_lock))
 		return;
-    /*取消相应线程，线程运行到下一个取消点会自动退出*/				
+    /*取消相应线程，线程运行到下一个取消点会自动退出*/
 	if(0 != pthread_cancel(p_thread->m_id))//若取消失败 返回
 		return;
 	if(p_thread->m_state == isbusy){
@@ -199,7 +199,7 @@ void ThreadPool::delete_thread(Thread *p_thread){
 			p_thread->prev->next = p_thread->next;
 			p_thread->next->prev = p_thread->prev;
 		}
-		num_of_busy--;	
+		num_of_busy--;
 	}else if(p_thread->m_state == isidle){
 		if(num_of_idle == 1)
 			idle_head = idle_end = NULL;
@@ -229,12 +229,12 @@ void ThreadPool::delete_thread(Thread *p_thread){
  */
 
 bool ThreadPool::decrease_thread(){
-	
+
 	if(num_total <= num_min_t)
 		return false;
 	pthread_mutex_lock(&count_lock);
 	pthread_mutex_lock(&list_lock);
-	
+
 	while(num_total > num_min_t && num_of_idle > 0){
 		if(0 != pthread_cancel(idle_head->m_id))//取消位于闲置列表头的线程,失败后退出循环
 			break;
@@ -294,7 +294,7 @@ void ThreadPool::manage_increase(ofstream &os){
 		os << "manager try to create new threads" <<endl;
 		create_thread(num_min_t);
 	}
-	
+
 }
 
 /* 功能：	管理者减少线程数
@@ -331,7 +331,7 @@ size_t ThreadPool::get_busy_number()
      pthread_mutex_lock(&list_lock);
      ret = num_of_busy;
      pthread_mutex_unlock(&list_lock);
-     
+
      return ret;
 }
 
@@ -345,7 +345,7 @@ size_t ThreadPool::get_total_number()
      pthread_mutex_lock(&count_lock);
      ret = num_total;
      pthread_mutex_unlock(&count_lock);
-     
+
      return ret;
 }
 
@@ -363,7 +363,7 @@ void ThreadPool::display_status(ostream &os){
 	os<< "queue size   :   "<< get_queue_size() <<endl;
 	os << endl;
 }
- 
+
 /* 功能：	每个线程执行的函数，内部从任务队列中取任务执行
  * 参数：	arg，线程本身的指针
  * 返回值：	void * 无意义
@@ -376,12 +376,12 @@ void Close_logfile(void *arg){ //意外终止调用的函数
 }
 
 void *ThreadPool::thread_run(void *arg){
-	
+
 	Thread * p_thread_self = static_cast<Thread *>(arg);
 	pthread_t self_id = pthread_self();
 	ThreadPool* p_thread_pool = ThreadPool::create_instance();
 	TaskQueue &	tq = p_thread_pool->task_queue;
-	
+
 	/*创建日志文件*/
 	ofstream log_output;
 	char file_name[20] = {0};
@@ -418,29 +418,29 @@ void *ThreadPool::thread_run(void *arg){
  */
 void *ThreadPool::manager_run(void *arg){
 	pthread_t self_id = pthread_self();
-	
+
 	ThreadPool *p_thread_pool = static_cast<ThreadPool*>(arg);
-	
+
 	ofstream log_output;
 	log_output.open("manage_log",ofstream::app);
 	if(!log_output)
 		pthread_exit(static_cast<void *>(0));
 	log_output << "manager thread start..."<<endl;
 	log_output << "pid:"<<getpid()<<endl;
-	
+
 	while(true){
 		/* 检查是否需要增加线程 */
 		p_thread_pool->manage_increase(log_output);
 		/* 是否需要减少线程 */
 		p_thread_pool->manage_decrease(log_output);
-		
+
 		if(!p_thread_pool->get_manager_flag())
 			break;
 		log_output<< "manager try to sleep now..."<<endl;
 		sleep(p_thread_pool->get_during_seconds());
-		
+
 		p_thread_pool->display_status(log_output);
-		
+
 	}
 	/*当前线程退出时自动释放线程资源*/
 	pthread_detach(self_id);

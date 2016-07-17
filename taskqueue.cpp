@@ -29,7 +29,7 @@ bool TaskQueue::initial_locks(){
 		||0 != pthread_cond_init(&producer_cond,NULL)
 		||0 != pthread_mutex_init(&queue_lock,NULL))
 			return false;
-			
+
 	return true;
 }
 
@@ -42,7 +42,7 @@ bool TaskQueue::destroy_locks(){
 		||0 != pthread_cond_destroy(&producer_cond)
 		||0 != pthread_mutex_destroy(&queue_lock))
 			return false;
-			
+
 	return true;
 }
 
@@ -51,14 +51,14 @@ bool TaskQueue::destroy_locks(){
  * 返回值：	成功返回true，失败返回false
  */
 bool TaskQueue::add_task(TaskBase *task){
-	
+
 	/*任务基类指针可能指向的是派生类对象，需调用虚函数clone*/
 	TaskBase *tmp = task->clone();
 	return do_add_task(tmp);
 }
 
 bool TaskQueue::add_task(TaskBase &task){
-	
+
 	/*任务基类引用可能绑定的是派生类对象，需调用虚函数clone*/
 	TaskBase *tmp = task.clone();
 	return do_add_task(tmp);
@@ -74,16 +74,16 @@ bool TaskQueue::do_add_task(TaskBase* task){
 		task = NULL;
 		return false;
 	}
-	
+
 	while(queue_size >= MAX_TASK_NUMBER)//while循环做条件判断
 		pthread_cond_wait(&producer_cond,&queue_lock);
 	m_task_queue.push(task);
 	queue_size++;
-	
+
 	pthread_mutex_unlock(&queue_lock);
 	/*唤醒阻塞在worker_cond上的所有线程*/
 	pthread_cond_signal(&worker_cond);
-	
+
 	return true;
 }
 
@@ -91,7 +91,7 @@ bool TaskQueue::do_add_task(TaskBase* task){
  * 参数：	无
  * 返回值：	返回任务指针
  */
- void unlock_mutex(void *arg){ 
+ void unlock_mutex(void *arg){
  	pthread_mutex_unlock((pthread_mutex_t *)arg);
  }
 TaskBase* TaskQueue::get_task(){
@@ -110,7 +110,7 @@ TaskBase* TaskQueue::get_task(){
 	pthread_cleanup_pop(0);
 	/*唤醒阻塞在producer_cond上的所有线程*/
 	pthread_cond_signal(&producer_cond);
-	
+
 	return task;
 }
 
@@ -118,14 +118,14 @@ TaskBase* TaskQueue::get_task(){
  * 参数：	无
  * 返回值：	返回任务指针
  */
- 
+
 size_t TaskQueue::size()
 {
     size_t ret = 0;
     pthread_mutex_lock(&queue_lock);
     ret = queue_size;
     pthread_mutex_unlock(&queue_lock);
-    
+
     return ret;
 }
 

@@ -11,7 +11,7 @@ using namespace std;
 const size_t MAX_THREAD_NUM  	= 	100;
 const size_t TIME_PERIOD_SEC	=	1;
 const size_t OVERLOAD_TASKS		=	100;
-const size_t MIN_THREAD_NUM     =   5; 
+const size_t MIN_THREAD_NUM     =   5;
 /*线程状态*/
 enum Threadstate{
 	isbusy = 0,
@@ -30,11 +30,11 @@ class Thread{
 	Thread 		*next;
 	Threadstate m_state;
 };
- 
+
 /*线程池类：创建线程池,初始化初始线程数量，可以对idle和busy的线程进行调度
  *			使用两个链表来维护idle和busy的线程。
  * 			可以为该线程池创建管理者，负责添加和销毁线程，并可以指示线程退出
- * 			
+ *
  */
 
 class ThreadPool{
@@ -49,16 +49,16 @@ public:
 	bool create_manager();
 	void manage_increase(ofstream& os);
 	void manage_decrease(ofstream& os);
-	
+
 	void display_status(ostream &os);
-	
-	unsigned int get_idle_number();
-	unsigned int get_busy_number();
-	unsigned int get_total_number();
-	
+
+	size_t get_idle_number();
+	size_t get_busy_number();
+	size_t get_total_number();
+
 	bool add_task(TaskBase *task);
 	bool add_task(TaskBase &task);
-	
+
 	ThreadPool* set_max_number(size_t number){
 		num_max_t = number;
 		return this;
@@ -78,7 +78,7 @@ public:
 	void clear_manager_id(){
 		m_manager = 0;
 	}
-	
+
 	bool get_manager_flag() const{
 		return manager_flag;
 	}
@@ -97,7 +97,7 @@ private:
 	ThreadPool();
 	ThreadPool(const ThreadPool&);
 	ThreadPool& operator=(const ThreadPool&);
-	
+
 	void   				add_to_idle(Thread *);
 	void 				add_to_busy(Thread *);
 	void				delete_thread(Thread *);
@@ -108,13 +108,13 @@ private:
 	pthread_t 			m_manager;  //  管理者线程id
 	pthread_mutex_t		count_lock; //  局部锁
 	pthread_mutex_t 	list_lock;  //	列表锁
-	
+
 	bool 				initialed;
 	bool				manager_flag;
-	
+
 	size_t 				period_of;  //
 	size_t				overload_tasks; //任务过载数量
-	
+
 	time_t				start_time; //  线程池启动时间
 	size_t 				num_total;	//  总的线程数
 	size_t				num_min_t;  //  最小线程数
@@ -127,7 +127,7 @@ private:
     Thread*             busy_end;
 
 	TaskQueue			task_queue; //	任务队列
-	
+
 };
 
 #endif
