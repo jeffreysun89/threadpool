@@ -11,13 +11,16 @@ using namespace std;
 const size_t MAX_THREAD_NUM  	= 	100;
 const size_t TIME_PERIOD_SEC	=	1;
 const size_t OVERLOAD_TASKS		=	100;
-const size_t MIN_THREAD_NUM     =   5;
+const size_t MIN_THREAD_NUM		=   5;
+const size_t CHANGE_THREAD_NUM	=	5;
 /*线程状态*/
 enum Threadstate{
 	isbusy = 0,
 	isidle,
-	newcreated
+	newcreated,
+	deleted
 };
+
 
 /* 线程类：每一个线程记录线程的id和线程状态
  * 		   设置线程池类为友元
@@ -29,6 +32,12 @@ class Thread{
 	Thread 		*prev;
 	Thread 		*next;
 	Threadstate m_state;
+};
+
+struct thread_clean_param
+{
+	ofstream *os;
+	Thread * myself;
 };
 
 /*线程池类：创建线程池,初始化初始线程数量，可以对idle和busy的线程进行调度
@@ -115,18 +124,19 @@ private:
 	size_t 				period_of;  //
 	size_t				overload_tasks; //任务过载数量
 
-	time_t				start_time; //  线程池启动时间
-	size_t 				num_total;	//  总的线程数
-	size_t				num_min_t;  //  最小线程数
-	size_t				num_max_t;	//  最大线程数
-	size_t				num_of_idle;//空闲线程数
-	size_t 				num_of_busy;//忙碌线程数
-	Thread*             idle_head; // idle双向链表头
+	time_t				start_time;		//  线程池启动时间
+	size_t 				num_total;		//  总的线程数
+	size_t				num_min_t;  	//  最小线程数
+	size_t				num_max_t;		//  最大线程数
+	size_t				num_change_t;	//  每次增加（减少）的线程数量
+	size_t				num_of_idle;	//空闲线程数
+	size_t 				num_of_busy;	//忙碌线程数
+	Thread*             idle_head; 		// idle双向链表头
     Thread*             idle_end;
-    Thread*             busy_head; // busy双向链表头
+    Thread*             busy_head;		// busy双向链表头
     Thread*             busy_end;
 
-	TaskQueue			task_queue; //	任务队列
+	TaskQueue			task_queue; 	//	任务队列
 
 };
 

@@ -23,6 +23,20 @@ int main(int argc, char **argv)
 		tasktest tmp;
 		pool->add_task(tmp);
 	}
+	sleep(3);
+	for(int i = 0;i < 100000;i++){
+		tasktest tmp;
+		pool->add_task(tmp);
+	}
+	for(int i = 0;i < 100000;i++){
+		tasktest tmp;
+		pool->add_task(tmp);
+		usleep(5);
+	}
+	for(int i = 0;i < 100000;i++){
+		tasktest tmp;
+		pool->add_task(tmp);
+	}
 	sleep(10);
 	return 0;
 }

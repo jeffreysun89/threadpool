@@ -29,6 +29,7 @@ ThreadPool::ThreadPool()
 	 num_total(0),
 	 num_min_t(MIN_THREAD_NUM),
 	 num_max_t(MAX_THREAD_NUM),
+	 num_change_t(CHANGE_THREAD_NUM),
 
 
 	 num_of_idle(0),
@@ -75,7 +76,8 @@ bool ThreadPool::create_thread(size_t number){
 			delete tmp;
 			tmp = NULL;
 		}
-		++num_total;
+		else
+			++num_total;
 	}
 	pthread_mutex_unlock(&count_lock);
 	return true;
@@ -97,7 +99,7 @@ bool ThreadPool::add_task(TaskBase &task){
  * 返回值：	无
  */
 void ThreadPool::add_to_idle(Thread *p_thread){
-	if(p_thread->m_state == isidle)
+	if(p_thread->m_state == isidle || p_thread->m_state == deleted)
 		return;
 	if(0 != pthread_mutex_lock(&list_lock))
 		return;
@@ -118,17 +120,24 @@ void ThreadPool::add_to_idle(Thread *p_thread){
 		}
 		num_of_busy--;
 	}
-	/*插入到idle链表*/
-	if(idle_head == NULL)
-		idle_head = idle_end = p_thread;
-	else{
-		idle_end->next = p_thread;
-		p_thread->prev = idle_end;
-		idle_end = p_thread;
-	}
-	p_thread->m_state = isidle;
-	num_of_idle++;
 
+	//清除单节点的前后链
+	p_thread->prev = NULL;
+	p_thread->next = NULL;
+	//仅对处于 忙碌和新增状态的线程加入链表,处于删除状态的节点不进行加入链表操作
+	if(p_thread->m_state == isbusy || p_thread->m_state == newcreated)
+	{
+		/*插入到idle链表*/
+		if(idle_head == NULL)
+			idle_head = idle_end = p_thread;
+		else{
+			idle_end->next = p_thread;
+			p_thread->prev = idle_end;
+			idle_end = p_thread;
+		}
+		p_thread->m_state = isidle;
+		num_of_idle++;
+	}
 	pthread_mutex_unlock(&list_lock);
 }
 
@@ -137,7 +146,7 @@ void ThreadPool::add_to_idle(Thread *p_thread){
  * 返回值：	无
  */
 void ThreadPool::add_to_busy(Thread *p_thread){
-	if(p_thread->m_state == isbusy)
+	if(p_thread->m_state == isbusy || p_thread->m_state == newcreated)
 		return;
 	if(0 != pthread_mutex_lock(&list_lock))
 		return;
@@ -158,69 +167,21 @@ void ThreadPool::add_to_busy(Thread *p_thread){
 		}
 		num_of_idle--;
 	}
-	/*c插入到busy链表*/
-	if(busy_head == NULL)
-		busy_head = busy_end = p_thread;
-	else{
-		busy_end->next = p_thread;
-		p_thread->prev = busy_end;
-		busy_end = p_thread;
+	if (p_thread->m_state == isidle || p_thread->m_state == newcreated)
+	{
+		/*插入到busy链表*/
+		if(busy_head == NULL)
+			busy_head = busy_end = p_thread;
+		else{
+			busy_end->next = p_thread;
+			p_thread->prev = busy_end;
+			busy_end = p_thread;
+		}
+		p_thread->m_state = isbusy;
+		num_of_busy++;
 	}
-	p_thread->m_state = isbusy;
-	num_of_busy++;
-
 	pthread_mutex_unlock(&list_lock);
 }
-
-/* 功能：	删除某个线程
- * 参数：	p_thread，线程对象的指针
- * 返回值：	无
- */
-void ThreadPool::delete_thread(Thread *p_thread){
-	pthread_mutex_lock(&count_lock);
-	num_total--;
-	pthread_mutex_unlock(&count_lock);
-	if(0 != pthread_mutex_lock(&list_lock))
-		return;
-    /*取消相应线程，线程运行到下一个取消点会自动退出*/
-	if(0 != pthread_cancel(p_thread->m_id))//若取消失败 返回
-		return;
-	if(p_thread->m_state == isbusy){
-		if(num_of_busy == 1)
-			busy_head = busy_end = NULL;
-		else if(busy_head == p_thread){  //在链表头
-			busy_head = busy_head->next;
-			busy_head->prev = NULL;
-		}
-		else if(busy_end == p_thread){  //在链表尾
-			busy_end = busy_end->prev;
-			busy_end->next = NULL;
-		}else{							//
-			p_thread->prev->next = p_thread->next;
-			p_thread->next->prev = p_thread->prev;
-		}
-		num_of_busy--;
-	}else if(p_thread->m_state == isidle){
-		if(num_of_idle == 1)
-			idle_head = idle_end = NULL;
-		else if(idle_head == p_thread){
-			idle_head = idle_head->next;
-			idle_head->prev = NULL;
-		}
-		else if(idle_end == p_thread){
-			idle_end = idle_end->prev;
-			idle_end->next = NULL;
-		}else{
-			p_thread->prev->next = p_thread->next;
-			p_thread->next->prev = p_thread->prev;
-		}
-		num_of_idle--;
-	}
-	delete p_thread;
-	p_thread = NULL;
-	pthread_mutex_unlock(&list_lock);
-}
-
 
 
 /* 功能：	取消处于idle状态的多余线程
@@ -234,42 +195,31 @@ bool ThreadPool::decrease_thread(){
 		return false;
 	pthread_mutex_lock(&count_lock);
 	pthread_mutex_lock(&list_lock);
+	size_t		change_num = num_change_t;
 
-	while(num_total > num_min_t && num_of_idle > 0){
+	while(num_total > num_min_t && num_of_idle > 0 && change_num > 0){
 		if(0 != pthread_cancel(idle_head->m_id))//取消位于闲置列表头的线程,失败后退出循环
 			break;
-		Thread *tmp = idle_head;
-		delete idle_head;
+		Thread* tmp = idle_head;
 		idle_head = tmp->next;
-		idle_head->prev = NULL;
+		if (num_of_idle > 1)
+		{
+			//当仅有一个节点时，idle_head == NULL
+			idle_head->prev = NULL;
+		}
 		if(--num_of_idle == 0)
 			idle_head = idle_end = NULL;
 		--num_total;
+		tmp->prev = NULL;
+		tmp->next = NULL;
+		tmp->m_state = deleted;	//当执行到取消点时自己释放空间
+		--change_num;
 	}
 	pthread_mutex_unlock(&list_lock);
 	pthread_mutex_unlock(&count_lock);
-	//唤醒所有线程
-	//if(!task_queue.wake_up_all_worker())
-	//	return false;
 	return true;
 }
 
-/* 功能：	供线程检查自己的退出条件是否满足
- * 参数：	无
- * 返回值：	成功返回true，失败返回false
- */
-bool ThreadPool::check_decrease(){
-	bool res = true;
-
-	if(0 != pthread_mutex_lock(&count_lock))
-		return false;
-	if(num_total > num_min_t)
-		num_total--;
-	else
-		res = false;
-	pthread_mutex_unlock(&count_lock);
-	return res;
-}
 
 /* 功能：	为线程创建管理者
  * 参数：	无
@@ -286,13 +236,12 @@ bool ThreadPool::create_manager(){
  * 参数：	文件输出流，保存log文件
  * 返回值：	无
  */
-void ThreadPool::manage_increase(ofstream &os){
-	/*如果任务太多，那么唤醒所有线程*/
+void ThreadPool::manage_increase(ofstream& os){
+	/*如果任务太多，那么唤醒所有线程，增加工作线程数量*/
 	/* */
 	if(task_queue.size() > overload_tasks){
 		task_queue.wake_up_all_worker();
-		os << "manager try to create new threads" <<endl;
-		create_thread(num_min_t);
+		create_thread(num_change_t);
 	}
 
 }
@@ -370,7 +319,10 @@ void ThreadPool::display_status(ostream &os){
  */
 
 void Close_logfile(void *arg){ //意外终止调用的函数
-	ofstream &os = *static_cast<ofstream *>(arg);
+	thread_clean_param * param = static_cast<thread_clean_param *>(arg);
+	ofstream &os = *(param->os);
+	Thread * p_thread_self = param->myself;
+	delete p_thread_self;
 	os << "thread exit" <<endl;
 	os.close();
 }
@@ -395,7 +347,8 @@ void *ThreadPool::thread_run(void *arg){
 	/*当前线程退出时自动释放线程资源*/
 	pthread_detach(self_id);
 	/*设置清理函数，在前程取消时调用关闭文件函数*/
-	pthread_cleanup_push(Close_logfile,&log_output);
+	thread_clean_param clean_param = {&log_output,p_thread_self};
+	pthread_cleanup_push(Close_logfile,&clean_param);
 
 	while(true){
 		p_thread_pool->add_to_idle(p_thread_self);
